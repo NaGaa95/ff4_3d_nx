@@ -230,6 +230,75 @@ char *__strrchr_chk_fake(const char *s, int c, size_t slen) {
   return strrchr(s, c);
 }
 
+// DEBUG: snapshot the GL light/material/fog state on the first few lit (3D) draws.
+#if DEBUG_LOG
+static void gl_dump_lit_state(void) {
+  static int n = 0;
+  if (n >= 6) return;
+  if (!glIsEnabled(GL_LIGHTING)) return;  // only character/lit draws
+  n++;
+  GLfloat la[4]={0}, ld[4]={0}, lp[4]={0}, ma[4]={0}, md[4]={0}, me[4]={0}, ms[4]={0}, lma[4]={0}, fc[4]={0}, cc[4]={0};
+  glGetLightfv(GL_LIGHT0, GL_AMBIENT, la);
+  glGetLightfv(GL_LIGHT0, GL_DIFFUSE, ld);
+  glGetLightfv(GL_LIGHT0, GL_POSITION, lp);
+  glGetMaterialfv(GL_FRONT, GL_AMBIENT, ma);
+  glGetMaterialfv(GL_FRONT, GL_DIFFUSE, md);
+  glGetMaterialfv(GL_FRONT, GL_EMISSION, me);
+  glGetMaterialfv(GL_FRONT, GL_SPECULAR, ms);
+  glGetFloatv(GL_LIGHT_MODEL_AMBIENT, lma);
+  glGetFloatv(GL_FOG_COLOR, fc);
+  glGetFloatv(GL_CURRENT_COLOR, cc);
+  debugPrintf("LIT#%d L0en=%d amb(%.2f %.2f %.2f) dif(%.2f %.2f %.2f) pos(%.1f %.1f %.1f %.0f)\n",
+    n, glIsEnabled(GL_LIGHT0), la[0],la[1],la[2], ld[0],ld[1],ld[2], lp[0],lp[1],lp[2],lp[3]);
+  debugPrintf("  mat amb(%.2f %.2f %.2f) dif(%.2f %.2f %.2f) emi(%.2f %.2f %.2f) spc(%.2f %.2f %.2f) lmAmb(%.2f %.2f %.2f)\n",
+    ma[0],ma[1],ma[2], md[0],md[1],md[2], me[0],me[1],me[2], ms[0],ms[1],ms[2], lma[0],lma[1],lma[2]);
+  debugPrintf("  L1en=%d L2en=%d L3en=%d fog=%d fogcol(%.2f %.2f %.2f) cur(%.2f %.2f %.2f %.2f) colMat=%d norm=%d tex=%d\n",
+    glIsEnabled(GL_LIGHT1), glIsEnabled(GL_LIGHT2), glIsEnabled(GL_LIGHT3), glIsEnabled(GL_FOG),
+    fc[0],fc[1],fc[2], cc[0],cc[1],cc[2],cc[3],
+    glIsEnabled(GL_COLOR_MATERIAL), glIsEnabled(GL_NORMALIZE), glIsEnabled(GL_TEXTURE_2D));
+}
+static void glDrawArrays_log(GLenum mode, GLint first, GLsizei count) {
+  gl_dump_lit_state();
+  glDrawArrays(mode, first, count);
+}
+static void glColor4ub_log(GLubyte r, GLubyte g, GLubyte b, GLubyte a) {
+  static unsigned last = 0xffffffffu; static int lines = 0;
+  unsigned v = (r<<24)|(g<<16)|(b<<8)|a;
+  if (v != last && lines < 20) { last = v; lines++; debugPrintf("glColor4ub(%d %d %d %d)\n", r,g,b,a); }
+  glColor4ub(r, g, b, a);
+}
+#endif
+
+static int gl_is_white_emission(const GLfloat *p) {
+  return p && p[0] > 0.98f && p[1] > 0.98f && p[2] > 0.98f;
+}
+
+static int gl_rgb_has_value(const GLfloat *p) {
+  return p && (p[0] > 0.05f || p[1] > 0.05f || p[2] > 0.05f);
+}
+
+static int gl_material_has_lit_color(GLenum face) {
+  GLfloat ambient[4] = {0};
+  GLfloat diffuse[4] = {0};
+  GLenum query_face = face == GL_BACK ? GL_BACK : GL_FRONT;
+
+  glGetMaterialfv(query_face, GL_AMBIENT, ambient);
+  glGetMaterialfv(query_face, GL_DIFFUSE, diffuse);
+  return gl_rgb_has_value(ambient) || gl_rgb_has_value(diffuse);
+}
+
+static void glMaterialfv_fix(GLenum face, GLenum pname, const GLfloat *p) {
+  static const GLfloat black[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+
+  if (pname == GL_EMISSION && gl_is_white_emission(p) &&
+      gl_material_has_lit_color(face)) {
+    glMaterialfv(face, pname, black);
+    return;
+  }
+
+  glMaterialfv(face, pname, p);
+}
+
 
 // import table -------------------------------------------------------------
 
@@ -402,7 +471,11 @@ DynLibFunction dynlib_functions[] = {
   { "glBlendFunc", (uintptr_t)&glBlendFunc },
   { "glClear", (uintptr_t)&glClear },
   { "glClearColor", (uintptr_t)&glClearColor },
+#if DEBUG_LOG
+  { "glColor4ub", (uintptr_t)&glColor4ub_log },
+#else
   { "glColor4ub", (uintptr_t)&glColor4ub },
+#endif
   { "glColorPointer", (uintptr_t)&glColorPointer },
   { "glCullFace", (uintptr_t)&glCullFace },
   { "glDeleteTextures", (uintptr_t)&glDeleteTextures },
@@ -410,7 +483,11 @@ DynLibFunction dynlib_functions[] = {
   { "glDepthMask", (uintptr_t)&glDepthMask },
   { "glDisable", (uintptr_t)&glDisable },
   { "glDisableClientState", (uintptr_t)&glDisableClientState },
+#if DEBUG_LOG
+  { "glDrawArrays", (uintptr_t)&glDrawArrays_log },
+#else
   { "glDrawArrays", (uintptr_t)&glDrawArrays },
+#endif
   { "glEnable", (uintptr_t)&glEnable },
   { "glEnableClientState", (uintptr_t)&glEnableClientState },
   { "glFogf", (uintptr_t)&glFogf },
@@ -419,7 +496,7 @@ DynLibFunction dynlib_functions[] = {
   { "glLightfv", (uintptr_t)&glLightfv },
   { "glLoadIdentity", (uintptr_t)&glLoadIdentity },
   { "glLoadMatrixf", (uintptr_t)&glLoadMatrixf },
-  { "glMaterialfv", (uintptr_t)&glMaterialfv },
+  { "glMaterialfv", (uintptr_t)&glMaterialfv_fix },
   { "glMatrixMode", (uintptr_t)&glMatrixMode },
   { "glMultMatrixf", (uintptr_t)&glMultMatrixf },
   { "glNormalPointer", (uintptr_t)&glNormalPointer },
