@@ -233,9 +233,7 @@ static void update_keys(void) {
   if (d & HidNpadButton_A) m |= K_A;
   if (d & HidNpadButton_B) m |= K_B;
   if (d & HidNpadButton_X) m |= K_X;
-  if (d & HidNpadButton_Y) m |= K_Y;
   if (d & HidNpadButton_L) m |= K_L1;
-  if (d & HidNpadButton_R) m |= K_R1;
   if (d & HidNpadButton_Plus)  m |= K_Y;
   if (d & HidNpadButton_Minus) m |= K_R1;
   // d-pad and left stick both drive directions
