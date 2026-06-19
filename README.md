@@ -1,6 +1,6 @@
 <div align=center>
 
-<img src="extras/banner.png" alt="Banner" width="30%">
+<img src="extras/banner.png" alt="Banner" width="40%">
 
 </div>
 <h1 align=center>Final Fantasy IV 3D — Nintendo Switch port</h1>
