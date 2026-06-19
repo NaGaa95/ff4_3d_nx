@@ -14,8 +14,8 @@
 // so the Switch wrapper talks to libff4.so directly.
 #define SO_NAME "libff4.so"
 #define OBB_NAME "main.obb"
-#define CONFIG_NAME "ff4_3d_config.txt"
-#define LOG_NAME "ff4_3d_debug.log"
+#define CONFIG_NAME "config.txt"
+#define LOG_NAME "debug.log"
 
 #define DEBUG_LOG 0
 

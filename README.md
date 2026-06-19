@@ -36,12 +36,12 @@ So `/switch/ff4_3d/` should contain: `libff4.so`, `main.obb`, `res/raw/opening.m
 This will not work in applet/album mode. Use a game override (hold R on a title) or a
 forwarder, so the homebrew gets the full memory and required syscalls.
 
-Save games, achievement data, the port's `ff4_3d_config.txt` and `ff4_3d_debug.log` are
+Save games, achievement data, the port's `config.txt` is
 stored in `/switch/ff4_3d/`.
 
 ### Configuration
 
-`ff4_3d_config.txt` is created on first run:
+`config.txt` is created on first run:
 * `screen_width` / `screen_height` — render resolution; `-1` picks 1280x720 handheld and
   1920x1080 docked.
 * `widescreen` — set to `1` for a 16:9 viewport, or `0` for the legacy aspect.
