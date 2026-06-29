@@ -160,6 +160,9 @@ static void (*e_render)(void *env, void *thiz, int frame);
 static void (*e_resume)(void *env, void *thiz);
 static void (*e_pause)(void *env, void *thiz);
 
+// battle-UI singleton pointer (NULL outside battle); drives the flee flag
+static void **e_b2d_instance;
+
 static void resolve_entry_points(void) {
   e_initApp    = (void *)so_find_addr_rx(&game_mod, "_Z7initAppP7_JNIEnv");
   e_resumeFont = (void *)so_try_find_addr_rx(&game_mod, "resumeFont");
@@ -168,6 +171,7 @@ static void resolve_entry_points(void) {
   e_render      = (void *)so_find_addr_rx(&game_mod, "render");
   e_resume      = (void *)so_find_addr_rx(&game_mod, "resume");
   e_pause       = (void *)so_find_addr_rx(&game_mod, "pause");
+  e_b2d_instance = (void **)so_try_find_addr_rx(&game_mod, "_ZN3btl15Battle2DManager9instance_E");
 }
 
 static void *thiz;
@@ -245,6 +249,31 @@ static void update_keys(void) {
   jni_set_keys(m);
 }
 
+// Battle escape is a touch-only widget, so it's unreachable when docked. The
+// engine treats it as a hold flag in Battle2DManager (checkEscapeCtrl reads the
+// two bytes at instance_+0x141C4); hold the button to drive it like the on-screen
+// one. Only clears what it set, so the touch path is left alone.
+#define B2D_ESCAPE_FLAG_OFFSET 0x141c4
+#define FLEE_BUTTONS (HidNpadButton_ZL | HidNpadButton_ZR)
+
+static void update_flee(void) {
+  static int flee_held = 0;
+  if (!e_b2d_instance)
+    return;
+  uint8_t *inst = *(uint8_t **)e_b2d_instance;
+  if (!inst) {
+    flee_held = 0;
+    return;
+  }
+  volatile uint8_t *escape = inst + B2D_ESCAPE_FLAG_OFFSET;
+  if (padGetButtons(&pad) & FLEE_BUTTONS) {
+    escape[0] = escape[1] = 1;
+    flee_held = 1;
+  } else if (flee_held) {
+    escape[0] = escape[1] = 0;
+    flee_held = 0;
+  }
+}
 
 int main(void) {
   cpu_boost(1);
@@ -314,6 +343,7 @@ int main(void) {
   int last_interval = 1;
   while (appletMainLoop() && !jni_quit_requested) {
     update_keys();
+    update_flee();
     update_touch();
 
     const int target = jni_get_target_fps();
